@@ -1,36 +1,33 @@
-import pandas as pd
+import sys, os, json, subprocess
 
-def analyze_props(df):
-    """Simplified EV + edge display logic for uploaded prop data."""
-    rename = {
-        "player": "Player",
-        "Player": "Player",
-        "stat": "Stat",
-        "Stat": "Stat",
-        "line": "Line",
-        "Line": "Line",
-        "projection": "Projection",
-        "Projection": "Projection",
-        "p_model": "Model Prob",
-        "Model_Prob": "Model Prob",
-        "p_book": "Book Prob",
-        "Book_Prob": "Book Prob",
-        "ev": "EV ($/1)",
-        "EV": "EV ($/1)",
-    }
-    df = df.rename(columns=rename)
-    for c in ["Model Prob", "Book Prob", "EV ($/1)"]:
-        if c not in df.columns:
-            df[c] = 0
+# Path to your main model folder
+PROP_EV_PATH = os.path.expanduser("~/OneDrive/Desktop/propulse v1.1 beta")
 
-    # Convert probabilities and EV into readable form
-    df["Model Prob"] = (df["Model Prob"] * 100).round(2)
-    df["Book Prob"] = (df["Book Prob"] * 100).round(2)
-    df["EV (%)"] = (df["EV ($/1)"] * 100).round(2)
+def run_prop_ev(player, stat, line, odds):
+    """
+    Runs the real PropPulse model logic headlessly (no manual inputs).
+    Returns parsed JSON result.
+    """
+    try:
+        # Run the model via subprocess and return the structured output
+        cmd = [
+            "python",
+            os.path.join(PROP_EV_PATH, "prop_ev.py"),
+            "--player", player,
+            "--stat", stat,
+            "--line", str(line),
+            "--odds", str(odds)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        output = result.stdout.strip()
 
-    # Simplify key columns for readability
-    keep_cols = [
-        "Player", "Stat", "Line", "Projection", "Model Prob",
-        "Book Prob", "EV (%)"
-    ]
-    return df[keep_cols].head(100)
+        # Optional: extract the final EV JSON block if your model prints one
+        if "{" in output and "}" in output:
+            json_block = output[output.find("{"):output.rfind("}")+1]
+            return json.loads(json_block)
+
+        # Fallback: raw text
+        return {"Player": player, "Output": output}
+
+    except Exception as e:
+        return {"Player": player, "Error": str(e)}
