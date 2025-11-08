@@ -1,33 +1,46 @@
-import sys, os, json, subprocess
-
-# Path to your main model folder
-PROP_EV_PATH = os.path.expanduser("~/OneDrive/Desktop/propulse v1.1 beta")
+import subprocess
+import json
 
 def run_prop_ev(player, stat, line, odds):
     """
-    Runs the real PropPulse model logic headlessly (no manual inputs).
-    Returns parsed JSON result.
+    Wrapper that runs prop_ev.py with arguments and returns JSON result.
+    Works in both local and Streamlit Cloud environments.
     """
     try:
-        # Run the model via subprocess and return the structured output
-        cmd = [
-            "python",
-            os.path.join(PROP_EV_PATH, "prop_ev.py"),
-            "--player", player,
-            "--stat", stat,
-            "--line", str(line),
-            "--odds", str(odds)
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        output = result.stdout.strip()
+        result = subprocess.run(
+            [
+                "python",
+                "prop_ev.py",
+                "--player", str(player),
+                "--stat", str(stat),
+                "--line", str(line),
+                "--odds", str(odds)
+            ],
+            capture_output=True,
+            text=True,
+            check=False
+        )
 
-        # Optional: extract the final EV JSON block if your model prints one
-        if "{" in output and "}" in output:
-            json_block = output[output.find("{"):output.rfind("}")+1]
-            return json.loads(json_block)
+        stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
 
-        # Fallback: raw text
-        return {"Player": player, "Output": output}
+        # Debug logging for troubleshooting
+        print("=== DEBUG STDOUT ===")
+        print(stdout)
+        if stderr:
+            print("=== DEBUG STDERR ===")
+            print(stderr)
+
+        # Try to parse JSON output from prop_ev.py
+        try:
+            data = json.loads(stdout)
+            return data
+        except json.JSONDecodeError:
+            return {
+                "Player": player,
+                "Error": "Failed to parse output",
+                "RawOutput": stdout
+            }
 
     except Exception as e:
         return {"Player": player, "Error": str(e)}
